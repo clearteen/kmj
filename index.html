@@ -71,6 +71,10 @@
     @keyframes errIn{ from{transform:translateY(6px);opacity:0} to{transform:translateY(0);opacity:1} }
     @keyframes fadeOut{ to{opacity:0} }
 
+    /* 축하 문구 */
+    .cele{ position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:clamp(24px,6vw,44px); font-weight:900; opacity:0; }
+    @keyframes fadeInSlow{ from{opacity:0} to{opacity:1} }
+
     /* 플로팅 버튼: 이미지 아이콘 사용 */
     #sync{ position:fixed; right:16px; bottom:20px; background:transparent; border:none; padding:0; }
     #sync img{ width:68px; height:68px; display:block; filter: drop-shadow(0 10px 24px rgba(34,197,94,.35)); }
@@ -302,6 +306,14 @@
       await animateYearCount(d, 2017, 2025, "03", "28");
       await swapDigits(d, "2025", "03", "28", "08", "23");
 
+      // 5) 축하 문구 페이드 인
+      const wrap = document.querySelector('.auto-wrap');
+      const cele = document.createElement('div');
+      cele.className = 'cele';
+      cele.textContent = '생일 축하해';
+      wrap.appendChild(cele);
+      cele.style.animation = 'fadeInSlow 2000ms ease-out forwards';
+
       stage = 6; saveStage();
     }
 
@@ -336,7 +348,7 @@
     }
 
     async function swapDigits(el, yyyy, mmFrom, ddFrom, mmTo, ddTo){
-      // 0과 2는 고정, 3과 8만 서로의 자리로 '부드럽게' 이동
+      // DOM 내부에 래퍼를 만들되, 실제 이동은 '고스트 숫자' 오버레이로 처리해 깜빡임/자리 뒤바뀜을 제거
       el.innerHTML = `
         <span class="numWrap">
           <span class="yyyy">${yyyy}</span>
@@ -350,30 +362,39 @@
       const d2 = el.querySelector('.d2');
       const r1 = m2.getBoundingClientRect();
       const r2 = d2.getBoundingClientRect();
-      const dx12 = r2.left - r1.left;
-      const dy12 = r2.top - r1.top;
-      const dx21 = r1.left - r2.left;
-      const dy21 = r1.top - r2.top;
 
-      // ⏱ 교체 시간(ms) — 원하는 길이로 자유롭게 수정하세요 (예: 3000 = 3초)
-      const D = 3500; 
+      // 원본 숫자는 레이아웃 유지용으로만 두고, 가시성만 숨김 (깜빡임 방지)
+      m2.style.visibility = 'hidden';
+      d2.style.visibility = 'hidden';
+
+      // 날짜 텍스트의 스타일을 복사하여 고스트 스팬 생성
+      const cs = getComputedStyle(el);
+      const ghost = (ch, rect) => {
+        const g = document.createElement('span');
+        g.textContent = ch;
+        Object.assign(g.style, {
+          position:'fixed', left: rect.left + 'px', top: rect.top + 'px',
+          fontFamily: cs.fontFamily, fontSize: cs.fontSize, fontWeight: cs.fontWeight,
+          letterSpacing: cs.letterSpacing, color: cs.color, lineHeight: cs.lineHeight,
+          zIndex: 9999, pointerEvents:'none'
+        });
+        document.body.appendChild(g); return g;
+      };
+      const g3 = ghost(mmFrom[1], r1); // '3'
+      const g8 = ghost(ddFrom[1], r2); // '8'
+
+      // ⏱ 애니메이션 시간(ms)
+      const D = 3500; // 필요시 3000 등으로 변경
       const opts = { duration: D, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'forwards' };
 
-      const a1 = m2.animate([{transform:'translate(0,0)'},{transform:`translate(${dx12}px,${dy12}px)`}], opts);
-      const a2 = d2.animate([{transform:'translate(0,0)'},{transform:`translate(${dx21}px,${dy21}px)`}], opts);
+      const a1 = g3.animate([{transform:'translate(0,0)'},{transform:`translate(${r2.left-r1.left}px,${r2.top-r1.top}px)`}], opts);
+      const a2 = g8.animate([{transform:'translate(0,0)'},{transform:`translate(${r1.left-r2.left}px,${r1.top-r2.top}px)`}], opts);
       vibrate(12);
 
-      // 애니메이션이 '정확히 끝난 뒤' 교체 → duration 변경해도 타이밍이 어긋나지 않음
-      try {
-        await Promise.all([a1.finished, a2.finished]);
-      } catch (e) {
-        // 일부 브라우저 호환: finished 미지원 시 시간으로 대체
-        await wait(D);
-      }
+      // 애니메이션이 정확히 끝난 뒤 최종 문자열로 교체
+      try { await Promise.all([a1.finished, a2.finished]); } catch(e) { await wait(D); }
 
-      m2.style.opacity = '0';
-      d2.style.opacity = '0';
-      await wait(40);
+      g3.remove(); g8.remove();
       el.textContent = `${yyyy} ${mmTo} ${ddTo}`;
     }
   </script>
