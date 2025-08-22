@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>동기화 퍼즐 (이미지 버전)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap" rel="stylesheet">
+  <style>
+    :root{ --bg:#0f172a; --panel:#0b1220; --line:#1f2937; --fg:#e2e8f0; --muted:#94a3b8; --accent:#22c55e; --danger:#f87171; }
+    *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+    html,body{ margin:0; height:100%; background:var(--bg); color:var(--fg); font-family:"Noto Sans KR", system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; }
+    #scene{ min-height:100dvh; display:flex; align-items:center; justify-content:center; }
+
+    /* 이미지 씬 래퍼 */
+    .scene-wrap{ position:relative; width:100%; height:100dvh; overflow:hidden; }
+    .scene-wrap img.bg{ position:absolute; inset:0; width:100%; height:100%; object-fit:contain; background:#000; }
+
+    /* 모달 */
+    #modal[hidden]{ display:none; }
+    #modal{ position:fixed; inset:0; display:grid; place-items:center; background:rgba(0,0,0,.5); backdrop-filter:blur(2px); padding:16px; }
+    .panel{ width:min(460px,92vw); background:var(--panel); border:1px solid var(--line); border-radius:18px; padding:18px; position:relative; box-shadow:0 14px 40px rgba(0,0,0,.45); overflow:hidden; }
+    .panel h3{ margin:0 0 10px; font-weight:900; }
+    .close{ position:absolute; top:10px; right:10px; background:transparent; color:#cbd5e1; border:0; font-size:20px; line-height:1; }
+    .row{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+    .inp{ width:100%; padding:12px 14px; border-radius:12px; border:1px solid #243041; background:#0a1220; color:var(--fg); font-size:16px; }
+    .errTxt{ color:var(--danger); font-weight:700; margin-top:8px; }
+    .primary{ width:100%; padding:12px 14px; border-radius:12px; border:1px solid #16a34a33; background:linear-gradient(180deg,#16a34a,#16a34a) padding-box, linear-gradient(180deg,#16a34a55,#16a34a00) border-box; color:#fff; font-weight:900; margin-top:12px; }
+
+    /* 씬3 전용 모달 스킨 (디자인 시안 반영) */
+    .panel.skin-date{ background:#cfe1f3; border:2px solid #79a8d9; color:#0b1b2b; }
+    .panel.skin-date h3{ color:#0b1b2b; font-size:20px; }
+    .panel.skin-date .inp.date-box{
+      background:#fff; border:3px solid #69a3db; border-radius:8px;
+      height:48px; font-weight:800; font-size:20px; text-align:center; letter-spacing:.5px; color:#0b1b2b;
+      width:clamp(72px, 24vw, 110px); /* PC에서도 튀어나오지 않도록 */
+    }
+    .panel.skin-date .unit{ color:#fff; font-weight:900; margin:0 6px; font-size:20px; text-shadow:0 1px 0 rgba(0,0,0,.2); }
+    .panel.skin-date .primary{ background:#5a97d1; border:2px solid #0b0b0b; box-shadow:none; font-size:18px; height:48px; }
+    .panel.skin-date .close{ color:#0b1b2b; font-weight:900; text-shadow:0 2px 0 rgba(255,255,255,.4); font-size:22px; }
+    .date-row{ display:flex; align-items:center; justify-content:center; gap:6px; margin-top:12px; flex-wrap:wrap; }
+
+    /* 자동 시퀀스 */
+    .auto-wrap{ position:relative; display:grid; place-items:center; width:100%; height:100dvh; background:#000; color:#fff; }
+    .date{ font-size:44px; font-weight:900; letter-spacing:.5px; }
+    .msg{ position:absolute; bottom:30%; left:50%; transform:translateX(-50%); font-size:32px; font-weight:900; opacity:0; }
+    .msg.show{ animation:msgIn .25s forwards; }
+    .msg.hide{ animation:fadeOut .35s forwards; }
+    .errs{ position:absolute; inset:0; pointer-events:none; }
+    .errLine{ position:absolute; color:#ef4444; font-style:italic; font-weight:900; opacity:0; font-size:clamp(18px,4vw,36px); text-shadow:0 2px 0 rgba(0,0,0,.4); animation:errIn .28s forwards; }
+    .errs.fade-out{ animation:fadeOut .35s forwards; }
+    .date.drop{ animation:drop .7s cubic-bezier(.2,.9,.2,1) forwards; }
+    .numWrap{ display:inline-flex; align-items:baseline; gap:4px; }
+    .swap-left{ animation:swapLeft .6s ease-in-out forwards; }
+    .swap-right{ animation:swapRight .6s ease-in-out forwards; }
+
+    @keyframes msgIn{ from{transform:translate(-50%,6px);opacity:0} to{transform:translate(-50%,0);opacity:1} }
+    @keyframes errIn{ from{transform:translateY(6px);opacity:0} to{transform:translateY(0);opacity:1} }
+    @keyframes fadeOut{ to{opacity:0} }
+    @keyframes drop{ to{ transform:translateY(28vh); } }
+    @keyframes swapLeft{ to{ transform:translateX(-46px); } }
+    @keyframes swapRight{ to{ transform:translateX(46px); } }
+
+    /* 플로팅 버튼: 이미지 아이콘 사용 */
+    #sync{ position:fixed; right:16px; bottom:20px; background:transparent; border:none; padding:0; }
+    #sync img{ width:68px; height:68px; display:block; filter: drop-shadow(0 10px 24px rgba(34,197,94,.35)); }
+
+    /* 토스트 */
+    .toast{ position:fixed; left:50%; bottom:86px; transform:translateX(-50%); background:#0a1220; border:1px solid var(--line); color:#e2e8f0; padding:10px 12px; border-radius:10px; opacity:0; pointer-events:none; }
+    .toast.show{ animation:toastIn .25s forwards, toastOut .25s 2.2s forwards; }
+    @keyframes toastIn{ to{ opacity:1; transform:translate(-50%,-4px);} }
+    @keyframes toastOut{ to{ opacity:0; transform:translate(-50%,4px);} }
+  </style>
+</head>
+<body>
+  <main id="scene"></main>
+
+  <!-- 모달 -->
+  <div id="modal" hidden aria-modal="true" role="dialog" aria-labelledby="modalTitle">
+    <div class="panel">
+      <button id="close" class="close" aria-label="닫기">✕</button>
+      <h3 id="modalTitle">동기화 암호</h3>
+      <div id="modalBody"></div>
+      <p id="errTxt" class="errTxt" hidden>암호가 틀렸습니다.</p>
+      <button id="submit" class="primary">확인</button>
+    </div>
+  </div>
+
+  <!-- 이미지 아이콘 버튼 (첨부한 동기화 아이콘 사용) -->
+  <button id="sync" aria-label="동기화">
+    <img src="./assets/sync.png" alt="동기화">
+  </button>
+  <div id="toast" class="toast">진행을 저장했습니다</div>
+
+  <script>
+    // ==== 설정: 업로드하신 파일명을 다음 경로로 두시면 즉시 동작합니다 ====
+    // ./assets/씬1 합본.png   (씬1 배경)
+    // ./assets/씬2 합본.png   (씬2 배경)
+    // ./assets/scene3.png     (씬3 배경)
+    // ./assets/암호입력창(ver.5).png (씬3 모달 배경 스킨)
+
+    const PATH = {
+      scene1: "./assets/씬1 합본.png",
+      scene2: "./assets/씬2 합본.png",
+      scene3: "./assets/scene3.png",
+      modalSkinScene3: "./assets/암호입력창(ver.5).png",
+    };
+
+    // ===== 상태 및 유틸 =====
+    const $ = s => document.querySelector(s);
+    const scene = $("#scene");
+    const modal = $("#modal");
+    const modalBody = $("#modalBody");
+    const errTxt = $("#errTxt");
+    const toast = $("#toast");
+
+    let stage = Number(localStorage.getItem("stage") || 1);
+    let inputRefs = null;
+
+    function saveStage(){ localStorage.setItem("stage", String(stage)); showToast(); }
+    function vibrate(ms){ if (navigator.vibrate) navigator.vibrate(ms); }
+    function wait(ms){ return new Promise(r=>setTimeout(r,ms)); }
+    function showToast(){ toast.classList.add("show"); setTimeout(()=>toast.classList.remove("show"), 2500); }
+
+    // ===== 답변 해시(plaintext 미포함) =====
+    const ANSWER_HASHES = new Map([
+      [1, "307a88de1bc3a173a9520564c2d7bd52e79429471def43e32668030dff6045ef"], // "kimminji"
+      [2, "a5bda57a2d1f524d4d1c4ba7fa0d23bce8d7d5cb8b112a26db870c4d2868ff4c"], // "12:56"
+      [3, "eaa6f506fa49ff67a3896fc3fdeed5919fec6f75f5b21de800e298216c7e8aab"], // "2017 03 28"
+    ]);
+
+    async function sha256(str){
+      const buf = new TextEncoder().encode(str);
+      const hash = await crypto.subtle.digest("SHA-256", buf);
+      return [...new Uint8Array(hash)].map(b=>b.toString(16).padStart(2,"0")).join("");
+    }
+    async function verify(stage, value){
+      const h = await sha256(value.trim());
+      return h === ANSWER_HASHES.get(stage);
+    }
+
+    // ===== 초기 렌더 =====
+    renderStage();
+
+    $("#sync").addEventListener("click", () => {
+      if (stage === 1)      openPasswordModal({ type: "text", placeholder: "암호 입력" });
+      else if (stage === 2) openPasswordModal({ type: "time-dual" });
+      else if (stage === 3) openPasswordModal({ type: "date-kr" }); // 씬3: 날짜 입력
+      else if (stage >= 4) { showToast(); }
+    });
+    $("#close").addEventListener("click", () => { modal.hidden = true; });
+    $("#submit").addEventListener("click", onSubmitPassword);
+
+    function renderStage(){
+      if (stage === 1){
+        scene.innerHTML = `
+          <div class="scene-wrap">
+            <img src="${PATH.scene1}" class="bg" alt="씬1 배경">
+          </div>`;
+      } else if (stage === 2){
+        scene.innerHTML = `
+          <div class="scene-wrap">
+            <img src="${PATH.scene2}" class="bg" alt="씬2 배경">
+          </div>`;
+      } else if (stage === 3){
+        scene.innerHTML = `
+          <div class="scene-wrap">
+            <img src="${PATH.scene3}" class="bg" alt="씬3 배경">
+          </div>`;
+      } else if (stage >= 4){
+        playAutoSequence();
+      }
+    }
+
+    // ===== 모달 =====
+    function openPasswordModal(opts){
+      modal.hidden = false;
+      errTxt.hidden = true;
+
+      const panel = modal.querySelector('.panel');
+      panel.classList.toggle('skin-date', opts.type === 'date-kr');
+      if (opts.type === 'date-kr') {
+        // 씬3 시안 배경 이미지 사용
+        panel.style.background = `#cfe1f3 url(${PATH.modalSkinScene3}) center/cover no-repeat`;
+      } else {
+        panel.style.background = '';
+      }
+
+      // 제목
+      const title = document.getElementById('modalTitle');
+      title.textContent = (opts.type === 'date-kr') ? '암호를 입력하세요.' : '동기화 암호';
+
+      if (opts.type === "text"){
+        modalBody.innerHTML = `<input id="pw1" class="inp" placeholder="${opts.placeholder||''}" autocomplete="off" />`;
+        inputRefs = { a: document.getElementById('pw1') };
+        inputRefs.a.focus();
+      } else if (opts.type === "time-dual"){
+        modalBody.innerHTML = `
+          <div class="row">
+            <input id="tL" class="inp" inputmode="numeric" maxlength="2" placeholder="hh" autocomplete="one-time-code" />
+            <span>:</span>
+            <input id="tR" class="inp" inputmode="numeric" maxlength="2" placeholder="mm" />
+          </div>`;
+        inputRefs = { l: document.getElementById('tL'), r: document.getElementById('tR') };
+        inputRefs.l.focus();
+      } else if (opts.type === "date-kr"){
+        modalBody.innerHTML = `
+          <div class="date-row">
+            <input id="yy" class="inp date-box" inputmode="numeric" maxlength="4" />
+            <span class="unit">년</span>
+            <input id="mm" class="inp date-box" inputmode="numeric" maxlength="2" />
+            <span class="unit">월</span>
+            <input id="dd" class="inp date-box" inputmode="numeric" maxlength="2" />
+            <span class="unit">일</span>
+          </div>`;
+        inputRefs = { yy: document.getElementById('yy'), mm: document.getElementById('mm'), dd: document.getElementById('dd') };
+        inputRefs.yy.focus();
+
+        // 숫자만 허용 + 자동 이동
+        const digitsOnly = el => { el.value = [...el.value].filter(c => c >= '0' && c <= '9').join(''); };
+        [inputRefs.yy, inputRefs.mm, inputRefs.dd].forEach((el, i, arr) => {
+          el.addEventListener('input', () => {
+            digitsOnly(el);
+            const max = Number(el.getAttribute('maxlength')) || 2;
+            if (el.value.length >= max && arr[i+1]) arr[i+1].focus();
+          });
+        });
+      }
+    }
+
+    async function onSubmitPassword(){
+      let value = "";
+      if (stage === 1) {
+        value = inputRefs.a.value.trim();
+      } else if (stage === 2) {
+        value = `${inputRefs.l.value.trim()}:${inputRefs.r.value.trim()}`;
+      } else if (stage === 3) {
+        const yy = inputRefs.yy.value.trim();
+        const mm = inputRefs.mm.value.trim().padStart(2,'0');
+        const dd = inputRefs.dd.value.trim().padStart(2,'0');
+        value = `${yy} ${mm} ${dd}`; // '2017 03 28' 형식
+      }
+
+      const ok = await verify(stage, value);
+      if (!ok){ errTxt.hidden = false; vibrate(20); return; }
+      modal.hidden = true; stage++; saveStage(); renderStage();
+    }
+
+    // ===== 자동 시퀀스(S4~S6) =====
+    async function playAutoSequence(){
+      scene.innerHTML = `
+        <div class="auto-wrap">
+          <div class="date" id="date">2017 03 28</div>
+          <div class="msg" id="msg">무언가 잘못됐다.</div>
+          <div class="errs" id="errs"></div>
+        </div>`;
+
+      // 1) 안내 메시지 표시 후 사라짐
+      const msg = document.getElementById('msg');
+      await wait(150);
+      msg.classList.add('show');
+      await wait(900);
+      msg.classList.remove('show');
+      msg.classList.add('hide');
+      await wait(350);
+
+      // 2) ERROR!! 를 불규칙 위치에 순차적으로 표시
+      for (let i=0;i<12;i++){
+        addErrorLine(i);
+        await wait(140 + Math.random()*70);
+      }
+
+      // 3) 일괄 소거 + 날짜 낙하
+      await wait(500);
+      document.getElementById('errs').classList.add('fade-out');
+      const d = document.getElementById('date');
+      d.classList.add('drop');
+      await wait(900);
+
+      // 4) 연도 카운트업 → 자리 교체
+      await animateYearCount(d, 2017, 2025, "03", "28");
+      await swapDigits(d, "2025", "03", "28", "08", "23");
+
+      stage = 6; saveStage();
+    }
+
+    function addErrorLine(i){
+      const container = document.getElementById('errs');
+      const el = document.createElement('div');
+      el.className = 'errLine';
+      el.textContent = 'ERROR!!';
+      // 왼쪽 영역(8%~52%) 안에서 랜덤 배치 + 약간의 회전
+      const left = 8 + Math.random()*44;   // 8% ~ 52%
+      const top = 8 + Math.random()*80;    // 8% ~ 88%
+      const rot = -18 + Math.random()*36;  // -18deg ~ 18deg
+      el.style.left = left + '%';
+      el.style.top = top + '%';
+      el.style.transform = `translate(-50%,-50%) rotate(${rot}deg)`;
+      el.style.animationDelay = `${i*0.02}s`;
+      container.appendChild(el);
+    }
+
+    async function animateYearCount(el, from, to, mm, dd){
+      const duration = 1200; const t0 = performance.now();
+      return new Promise(resolve=>{
+        function frame(t){
+          const p = Math.min(1, (t-t0)/duration);
+          const y = Math.round(from + (to-from)*p);
+          el.textContent = `${y} ${mm} ${dd}`;
+          if (p < 1) requestAnimationFrame(frame); else resolve();
+        }
+        requestAnimationFrame(frame);
+      });
+    }
+
+    async function swapDigits(el, yyyy, mmFrom, ddFrom, mmTo, ddTo){
+      el.innerHTML = `
+        <span class="numWrap">
+          <span class="yyyy">${yyyy}</span>
+          <span class="mm a">${mmFrom}</span>
+          <span>&nbsp;</span>
+          <span class="dd b">${ddFrom}</span>
+        </span>`;
+      await wait(150);
+      document.querySelector('.mm.a').classList.add('swap-left');
+      document.querySelector('.dd.b').classList.add('swap-right');
+      vibrate(12);
+      await wait(620);
+      el.textContent = `${yyyy} ${mmTo} ${ddTo}`;
+    }
+  </script>
+</body>
+</html>
