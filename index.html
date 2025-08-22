@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-  <title>동기화 퍼즐 (이미지 버전)</title>
+  <title>???</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap" rel="stylesheet">
@@ -50,9 +50,9 @@
     .date-row{ display:flex; align-items:center; justify-content:center; gap:6px; margin-top:12px; flex-wrap:nowrap; white-space:nowrap; }
 
     /* 자동 시퀀스 레이아웃 */
-    .auto-wrap{ position:relative; display:grid; place-items:center; width:100%; height:100dvh; background:#000; color:#fff; }
+    .auto-wrap{ position:relative; display:grid; place-items:center; width:100%; height:100dvh; background:#000; color:#fff; overflow:hidden; }
     /* 날짜: 처음엔 중앙 상단(겹침 방지), 이후 드롭되며 정중앙 */
-    .date{ position:absolute; top:10%; left:50%; transform:translate(-50%,0); font-size:44px; font-weight:900; letter-spacing:.5px; }
+    .date{ position:absolute; top:10%; left:50%; transform:translate(-50%,0); font-size:44px; font-weight:900; letter-spacing:.5px; font-variant-numeric: tabular-nums; }
     @keyframes drop{ to{ top:50%; transform:translate(-50%,-50%); } }
     /* “무언가 잘못됐다.” 및 이후 문구는 정중앙 */
     .msg{ position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:32px; font-weight:900; opacity:0; }
@@ -60,17 +60,16 @@
     .msg.hide{ animation:fadeOut .35s forwards; }
     /* ERROR!! 난수 배치 */
     .errs{ position:absolute; inset:0; pointer-events:none; }
-    .errLine{ position:absolute; color:#ef4444; font-style:italic; font-weight:900; opacity:0; font-size:clamp(18px,4vw,36px); text-shadow:0 2px 0 rgba(0,0,0,.4); animation:errIn .28s forwards; }
+    .errLine{ position:absolute; color:#ef4444; font-style:italic; font-weight:900; opacity:0; font-size:clamp(18px,4vw,36px); text-shadow:0 2px 0 rgba(0,0,0,.4); animation:errIn .28s forwards; will-change: transform, opacity; }
     .errs.fade-out{ animation:fadeOut .35s forwards; }
+
     .numWrap{ display:inline-flex; align-items:baseline; gap:4px; }
-    .swap-left{ animation:swapLeft .6s ease-in-out forwards; }
-    .swap-right{ animation:swapRight .6s ease-in-out forwards; }
+    .date .mm, .date .dd{ display:inline-flex; gap:2px; }
+    .date .d{ display:inline-block; width:0.62em; text-align:center; }
 
     @keyframes msgIn{ from{transform:translate(-50%,6px);opacity:0} to{transform:translate(-50%, -50%);opacity:1} }
     @keyframes errIn{ from{transform:translateY(6px);opacity:0} to{transform:translateY(0);opacity:1} }
     @keyframes fadeOut{ to{opacity:0} }
-    @keyframes swapLeft{ to{ transform:translateX(-46px); } }
-    @keyframes swapRight{ to{ transform:translateX(46px); } }
 
     /* 플로팅 버튼: 이미지 아이콘 사용 */
     #sync{ position:fixed; right:16px; bottom:20px; background:transparent; border:none; padding:0; }
@@ -286,8 +285,8 @@
       msg.classList.add('hide');
       await wait(350);
 
-      // 2) ERROR!! 를 화면 전체에 더 많이 순차 표시
-      const ERR_COUNT = 36; // 더 많이
+      // 2) ERROR!! 를 화면 왼쪽 치우침 완화: 전체(6%~68%, 10%~90%) 범위에 더 많이 순차 표출
+      const ERR_COUNT = 36;
       for (let i=0;i<ERR_COUNT;i++){
         addErrorLine(i);
         await wait(110 + Math.random()*70);
@@ -312,10 +311,11 @@
       const el = document.createElement('div');
       el.className = 'errLine';
       el.textContent = 'ERROR!!';
-      // 화면 전체(10%~90%) 범위에 무작위 배치 + 약간의 회전
-      const left = 10 + Math.random()*80;   // 10% ~ 90%
-      const top  = 10 + Math.random()*80;   // 10% ~ 90%
-      const rot  = -18 + Math.random()*36;  // -18deg ~ 18deg
+      // 화면의 좌우 비율이 바뀌지 않도록, 컨테이너 내부에서만 렌더링(오버플로는 auto-wrap에서 잘림)
+      // 분포: left 6%~68%로 약간 왼쪽 치우치게, top 10%~90%
+      const left = 6 + Math.random()*62;   // 6% ~ 68%
+      const top  = 10 + Math.random()*80;  // 10% ~ 90%
+      const rot  = -18 + Math.random()*36; // -18deg ~ 18deg
       el.style.left = left + '%';
       el.style.top = top + '%';
       el.style.transform = `translate(-50%,-50%) rotate(${rot}deg)`;
@@ -337,26 +337,34 @@
     }
 
     async function swapDigits(el, yyyy, mmFrom, ddFrom, mmTo, ddTo){
-      // 교체 과정에서 뒤에 남는 '28'이 보이지 않도록, 교차 애니메이션 직후 기존 숫자를 투명화한 뒤 텍스트로 대체
+      // 0과 2는 고정, 3과 8만 서로의 자리로 '부드럽게' 이동
       el.innerHTML = `
         <span class="numWrap">
           <span class="yyyy">${yyyy}</span>
-          <span class="mm a">${mmFrom}</span>
+          <span class="mm"><span class="d m1">${mmFrom[0]}</span><span class="d m2">${mmFrom[1]}</span></span>
           <span>&nbsp;</span>
-          <span class="dd b">${ddFrom}</span>
+          <span class="dd"><span class="d d1">${ddFrom[0]}</span><span class="d d2">${ddFrom[1]}</span></span>
         </span>`;
-      await wait(120);
-      const mmEl = document.querySelector('.mm.a');
-      const ddEl = document.querySelector('.dd.b');
-      mmEl.classList.add('swap-left');
-      ddEl.classList.add('swap-right');
+      await wait(100);
+
+      const m2 = el.querySelector('.m2');
+      const d2 = el.querySelector('.d2');
+      const r1 = m2.getBoundingClientRect();
+      const r2 = d2.getBoundingClientRect();
+      const dx12 = r2.left - r1.left;
+      const dy12 = r2.top - r1.top;
+      const dx21 = r1.left - r2.left;
+      const dy21 = r1.top - r2.top;
+      const opts = { duration: 700, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'forwards' };
+      m2.animate([{transform:'translate(0,0)'},{transform:`translate(${dx12}px,${dy12}px)`}], opts);
+      d2.animate([{transform:'translate(0,0)'},{transform:`translate(${dx21}px,${dy21}px)`}], opts);
       vibrate(12);
-      // 애니메이션이 거의 끝나는 시점에 기존 숫자를 먼저 숨김
-      await wait(520);
-      mmEl.style.opacity = '0';
-      ddEl.style.opacity = '0';
-      await wait(60);
-      // 최종 문자열로 완전히 교체 (겹침 방지)
+
+      // 애니메이션 끝에 겹침 방지
+      await wait(700);
+      m2.style.opacity = '0';
+      d2.style.opacity = '0';
+      await wait(40);
       el.textContent = `${yyyy} ${mmTo} ${ddTo}`;
     }
   </script>
