@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-  <title>???</title>
+  <title>NAMKI PROJECT</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap" rel="stylesheet">
@@ -100,7 +100,6 @@
   <button id="sync" aria-label="동기화">
     <img src="./assets/sync.png" alt="동기화">
   </button>
-  <div id="toast" class="toast">진행을 저장했습니다</div>
 
   <script>
     // ==== 설정: 업로드하신 파일명을 다음 경로로 두시면 즉시 동작합니다 ====
@@ -132,10 +131,10 @@
     let stage = Number(localStorage.getItem("stage") || 1);
     let inputRefs = null;
 
-    function saveStage(){ localStorage.setItem("stage", String(stage)); showToast(); }
+    function saveStage(){ localStorage.setItem("stage", String(stage)); }
     function vibrate(ms){ if (navigator.vibrate) navigator.vibrate(ms); }
     function wait(ms){ return new Promise(r=>setTimeout(r,ms)); }
-    function showToast(){ toast.classList.add("show"); setTimeout(()=>toast.classList.remove("show"), 2500); }
+    function showToast(){}
 
     function updateSyncVisibility(){ syncBtn.style.display = (stage >= 4 ? 'none' : 'block'); }
 
@@ -355,13 +354,23 @@
       const dy12 = r2.top - r1.top;
       const dx21 = r1.left - r2.left;
       const dy21 = r1.top - r2.top;
-      const opts = { duration: 700, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'forwards' };
-      m2.animate([{transform:'translate(0,0)'},{transform:`translate(${dx12}px,${dy12}px)`}], opts);
-      d2.animate([{transform:'translate(0,0)'},{transform:`translate(${dx21}px,${dy21}px)`}], opts);
+
+      // ⏱ 교체 시간(ms) — 원하는 길이로 자유롭게 수정하세요 (예: 3000 = 3초)
+      const D = 3000; 
+      const opts = { duration: D, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'forwards' };
+
+      const a1 = m2.animate([{transform:'translate(0,0)'},{transform:`translate(${dx12}px,${dy12}px)`}], opts);
+      const a2 = d2.animate([{transform:'translate(0,0)'},{transform:`translate(${dx21}px,${dy21}px)`}], opts);
       vibrate(12);
 
-      // 애니메이션 끝에 겹침 방지
-      await wait(700);
+      // 애니메이션이 '정확히 끝난 뒤' 교체 → duration 변경해도 타이밍이 어긋나지 않음
+      try {
+        await Promise.all([a1.finished, a2.finished]);
+      } catch (e) {
+        // 일부 브라우저 호환: finished 미지원 시 시간으로 대체
+        await wait(D);
+      }
+
       m2.style.opacity = '0';
       d2.style.opacity = '0';
       await wait(40);
