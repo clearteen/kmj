@@ -344,7 +344,7 @@
           <span>&nbsp;</span>
           <span class="dd"><span class="d d1">${ddFrom[0]}</span><span class="d d2">${ddFrom[1]}</span></span>
         </span>`;
-      await wait(100);
+      await wait(1500);
 
       const m2 = el.querySelector('.m2');
       const d2 = el.querySelector('.d2');
@@ -356,7 +356,7 @@
       const dy21 = r1.top - r2.top;
 
       // ⏱ 교체 시간(ms) — 원하는 길이로 자유롭게 수정하세요 (예: 3000 = 3초)
-      const D = 3000; 
+      const D = 3500; 
       const opts = { duration: D, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'forwards' };
 
       const a1 = m2.animate([{transform:'translate(0,0)'},{transform:`translate(${dx12}px,${dy12}px)`}], opts);
